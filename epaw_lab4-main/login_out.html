@@ -1,0 +1,59 @@
+
+
+
+<div class="main-container">
+	<div class="brand-header">
+		<h1><span>AI</span>-Pulse</h1>
+		<p>Access your account and continue where you left off.</p>
+	</div>
+
+	<div class="w3-card-4 auth-card">
+		<div class="w3-container brand-title-bg">
+			<h2>Log in</h2>
+			<p class="auth-subtitle">Use your registered username and password.</p>
+		</div>
+
+		<form id="loginForm" action="Login" method="POST" class="w3-container w3-padding-24 auth-form">
+			<div class="auth-field">
+				<label for="name" class="w3-text-theme">Name</label>
+				<input type="text" class="w3-input w3-border" id="name" name="name" required minlength="5" maxlength="20"
+					value="Alex" placeholder="Enter your username"
+					title="Username must be between 5 and 20 characters." />
+			</div>
+
+			<div class="auth-field">
+				<label for="password" class="w3-text-theme">Password</label>
+				<input type="password" class="w3-input w3-border" id="password" name="password" required
+					value="" placeholder="Enter your password"
+					title="Enter your account password." />
+			</div>
+
+			<div class="auth-field">
+				<label class="w3-small">
+					<input type="checkbox" id="showLoginPassword" /> Show password
+				</label>
+			</div>
+
+			<button type="submit" class="w3-button w3-block w3-theme w3-section auth-action">Log in</button>
+		</form>
+	</div>
+</div>
+
+<script>
+	App.Errors = {};
+	
+	App.Errors["password"] = "The combination of name and password does not match in our dataabase";
+	
+	App.initLoginValidation(App.Errors);
+
+	(function () {
+		var toggle = document.getElementById("showLoginPassword");
+		var password = document.getElementById("password");
+
+		if (toggle && password) {
+			toggle.addEventListener("change", function () {
+				password.type = this.checked ? "text" : "password";
+			});
+		}
+	})();
+</script>

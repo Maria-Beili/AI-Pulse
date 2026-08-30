@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang=en>
+
+<head>
+	<meta charset="UTF-8">
+	<link rel="icon" href="assets/upf.png">
+	<title> U </title>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+	<link rel="stylesheet" href="https://www.w3schools.com/w3css/5/w3.css">
+	<link rel="stylesheet" href="https://www.w3schools.com/lib/w3-theme-blue.css">
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+	<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap">
+	<link rel="stylesheet" href="css/style.css">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<script>
+		window.App = window.App || {};
+		App.Errors = App.Errors || {};
+	</script>
+	<script src="js/LoginValidation.js"></script>
+	<script src="js/RegisterValidation.js"></script>
+	<script>
+		App.setDefaultLayout = function () {
+			$('#lcolumn').parent().show();
+			$('#rcolumn').parent().show();
+			$('#content').parent().removeClass('m8').addClass('m6').css({ 'margin': '', 'float': '' });
+		};
+
+		App.setSingleColumnLayout = function () {
+			$('#lcolumn').parent().hide();
+			$('#rcolumn').parent().hide();
+			$('#content').parent().removeClass('m6').addClass('m8').css({ 'margin': '0 auto', 'float': 'none' });
+		};
+
+		App.init = function () {
+
+			$.ajaxSetup({ cache: false });
+			// Load initial content
+			$('#navigation').load("Menu");
+
+			var hash = window.location.hash.substring(1);
+			App.setDefaultLayout();
+			if (hash && hash !== 'Logout') {
+				$('#content').load(hash);
+			} else {
+				// Load timeline directly so anonymous users see the public timeline at /
+				$('#content').load("Timeline.jsp");
+			}
+
+			$('#lcolumn').load("Profile");
+			$('#rcolumn').load("NotFollowed");
+			// Attach global events
+			App.bindEvents();
+
+			// Listen to back/forward navigation (Fired when user clicks Browser's Back/Forward buttons)
+			window.addEventListener("popstate", function (event) {
+				var hash = window.location.hash.substring(1); // Extract the fragment identifier
+				App.setDefaultLayout();
+				if (hash && hash !== 'Logout') {
+					// Dynamically load the previous view via AJAX to sync URL with UI
+					$('#content').load(hash);
+				} else {
+					$('#content').load("Timeline.jsp");
+				}
+			});
+		};
+
+		App.bindEvents = function () {
+			// Deal with menu clicks
+			$(document).on("click", ".menu", function (event) {
+				event.preventDefault(); // Stop normal HTML navigation
+				var targetUrl = $(this).attr('href');
+				App.setDefaultLayout();
+				$('#content').load(targetUrl); // Load content dynamically via AJAX
+				if (targetUrl !== 'Logout') {
+					// Record navigation in Browser History to allow Back/Forward buttons to work
+					window.history.pushState(null, "", "#" + targetUrl);
+				}
+				App.stack();
+			});
+			// Open the tweet detail when clicking anywhere on the tweet card,
+			// except inside the profile link area (avatar/name).
+			$(document).on("click", ".tweet-card", function (event) {
+				if ($(event.target).closest('.profile-link, .tweet-edit-box, .comment-edit-box, .tweet-actions, textarea, input, button').length > 0) {
+					return;
+				}
+				var targetUrl = $(this).data('tweet-url');
+				if (targetUrl) {
+					$('#content').load(targetUrl);
+					window.history.pushState(null, "", "#" + targetUrl);
+					App.stack();
+				}
+			});
+			$(document).on("click", ".profile-link", function (event) {
+				event.stopPropagation();
+			});
+			$(document).on("click", ".tweet-actions button", function (event) {
+				event.stopPropagation();
+			});
+			$(document).on("mousedown click focus", ".tweet-edit-box, .comment-edit-box, .comment-form textarea, .tweet-edit-box textarea, .comment-edit-box textarea", function (event) {
+				event.stopPropagation();
+			});
+			// Deal with form submission via AJAX
+			$(document).on("submit", "form", function (event) {
+				// sovles the bug of passwore fiels not being validated
+				if (event.isDefaultPrevented() || !this.checkValidity()) {
+					return;
+				}
+				event.preventDefault();
+				const form = this;
+				const data = new FormData(form);
+				$.ajax({
+					type: 'POST',
+					enctype: 'multipart/form-data',
+					url: $(form).attr('action'),
+					data: data,
+					processData: false,
+					contentType: false
+				}).done(function (html) {
+					$('#navigation').load("Menu");
+					$("#content").html(html);
+				});
+			});
+			/* Follow user */
+			$(document).on("click", ".followUser", function (event) {
+				var user = $(this).parent();
+				$.post("Follow", {
+					id: $(this).parent().attr("id")
+				}, function (event) {
+					$("#content").load("Followed");
+					$("#rcolumn").load("NotFollowed");
+				});
+				event.preventDefault();
+			});
+			/* UnFollow user */
+			$(document).on("click", ".unfollowUser", function (event) {
+				var user = $(this).parent();
+				$.post("Unfollow", {
+					id: $(this).parent().attr("id")
+				}, function (event) {
+					$("#content").load("Followed");
+					$("#rcolumn").load("NotFollowed");
+				});
+				event.preventDefault();
+			});
+			/* Add tweet */
+			$(document).on("click", "#addTweet", function (event) {
+				const content = $("#tweetContent").text().trim();
+				const imageFile = $("#tweetImage")[0].files[0];
+				if (!content && !imageFile) {
+					event.preventDefault();
+					return;
+				}
+				const formData = new FormData();
+				formData.append('content', content);
+				if (imageFile) {
+					formData.append('image', imageFile);
+				}
+				$.ajax({
+					type: 'POST',
+					url: 'AddTweet',
+					data: formData,
+					processData: false,
+					contentType: false
+				}).done(function (event) {
+					$("#content").load("Timeline");
+				});
+				event.preventDefault();
+			});
+			/* Delete tweet */
+			$(document).on("click", ".delTweet", function (event) {
+				var tweet = $(this).parent();
+				var tweetId = $(this).closest('[id]').attr("id");
+				$.post("DelTweet", {
+					id: tweetId
+				}, function (event) {
+					$("#content").load("Timeline");
+				});
+				event.preventDefault();
+			});
+			/* Open tweet in edit mode */
+			$(document).on("click", ".editTweet", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var tweetId = $(this).closest('[id]').attr("id");
+				if (tweetId) {
+					$("#content").load("Tweet?id=" + tweetId + "&edit=1");
+				}
+			});
+			/* Open comment in edit mode */
+			$(document).on("click", ".editComment", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var tweetId = $(this).data("parent-id") || $(this).closest('.tweet-card').attr("id") || $('#content .tweet-card').attr("id");
+				var commentId = $(this).data("comment-id");
+				if (tweetId && commentId) {
+					$("#content").load("Tweet?id=" + tweetId + "&editComment=" + commentId);
+				}
+			});
+			/* Cancel comment edits */
+			$(document).on("click", ".cancelCommentEdit", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var parent = $(this).closest('.comment-edit-box');
+				var tweetId = parent.data("parent-id") || $(this).closest('.tweet-card').attr("id");
+				if (tweetId) {
+					$("#content").load("Tweet?id=" + tweetId);
+				}
+			});
+			/* Remove image while editing */
+			$(document).on("click", ".remove-edit-image", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var box = $(this).closest('.tweet-edit-box, .comment-edit-box');
+				$(this).closest('.edit-image-preview').remove();
+				box.find('.remove-image-flag').val('1');
+			});
+			/* Save tweet edits */
+			$(document).on("click", ".saveTweetEdit", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var parent = $(this).closest('[data-tweet-id]');
+				var tweetId = parent.data("tweet-id");
+				var content = parent.find('.tweet-edit-content').val();
+				if (content) {
+					content = content.trim();
+				}
+				var imageFile = parent.find('.tweet-edit-image')[0].files[0];
+				var removeImage = parent.find('.remove-image-flag').val() === '1';
+				var keepsImage = parent.find('.edit-current-image').length > 0 && !removeImage;
+				if (!tweetId || (!content && !imageFile && !keepsImage)) {
+					return;
+				}
+				var formData = new FormData();
+				formData.append('id', tweetId);
+				formData.append('content', content || '');
+				if (imageFile) {
+					formData.append('image', imageFile);
+				}
+				if (removeImage) {
+					formData.append('removeImage', '1');
+				}
+				$.ajax({
+					type: 'POST',
+					url: 'UpdateTweet',
+					data: formData,
+					processData: false,
+					contentType: false
+				}).done(function () {
+					$("#content").load("Tweet?id=" + tweetId);
+				});
+			});
+			/* Save comment edits */
+			$(document).on("click", ".saveCommentEdit", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var parent = $(this).closest('.comment-edit-box');
+				var commentId = parent.data("comment-id");
+				var tweetId = parent.data("parent-id") || $(this).closest('.tweet-card').attr("id");
+				var content = parent.find('.comment-edit-content').val();
+				if (content) {
+					content = content.trim();
+				}
+				var imageFile = parent.find('.comment-edit-image')[0].files[0];
+				var removeImage = parent.find('.remove-image-flag').val() === '1';
+				var keepsImage = parent.find('.edit-current-image').length > 0 && !removeImage;
+				if (!commentId || !tweetId || (!content && !imageFile && !keepsImage)) {
+					return;
+				}
+				var formData = new FormData();
+				formData.append('id', commentId);
+				formData.append('content', content || '');
+				if (imageFile) {
+					formData.append('image', imageFile);
+				}
+				if (removeImage) {
+					formData.append('removeImage', '1');
+				}
+				$.ajax({
+					type: 'POST',
+					url: 'UpdateTweet',
+					data: formData,
+					processData: false,
+					contentType: false
+				}).done(function () {
+					$("#content").load("Tweet?id=" + tweetId);
+				});
+			});
+			/* Delete comment edits */
+			$(document).on("click", ".delCommentEdit", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var parent = $(this).closest('.comment-edit-box');
+				var commentId = parent.data("comment-id");
+				var tweetId = parent.data("parent-id") || $(this).closest('.tweet-card').attr("id");
+				if (!commentId || !tweetId) {
+					return;
+				}
+				$.post("DelTweet", {
+					id: commentId
+				}, function () {
+					$("#content").load("Tweet?id=" + tweetId);
+				});
+			});
+			/* Like tweet */
+			$(document).on("click", ".likeTweet", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var btn = $(this); // Save button reference
+				var tweetId = btn.closest('.tweet-card, .comment-item').attr("id");
+				$.post("LikeTweet", {
+					id: tweetId
+				}, function () {
+					// In-Place DOM Manipulation: Avoid reloading page. Update UI instantly.
+					var text = btn.text();
+					var countMatch = text.match(/\((\d+)\)/);
+					var count = countMatch ? parseInt(countMatch[1]) : 0;
+
+					// Swap classes and increment counter manually
+					btn.removeClass("likeTweet w3-theme").addClass("unlikeTweet w3-theme-d4");
+					btn.html('<i class="fa fa-thumbs-down"></i> &nbsp;Unlike (' + (count + 1) + ')');
+				});
+			});
+			/* Unlike tweet */
+			$(document).on("click", ".unlikeTweet", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var btn = $(this);
+				var tweetId = btn.closest('.tweet-card, .comment-item').attr("id");
+				$.post("UnlikeTweet", {
+					id: tweetId
+				}, function () {
+					var text = btn.text();
+					var countMatch = text.match(/\((\d+)\)/);
+					var count = countMatch ? parseInt(countMatch[1]) : 0;
+					var newCount = count > 0 ? count - 1 : 0;
+
+					btn.removeClass("unlikeTweet w3-theme-d4").addClass("likeTweet w3-theme");
+					btn.html('<i class="fa fa-thumbs-up"></i> &nbsp;Like (' + newCount + ')');
+				});
+			});
+			/* Add comment */
+			$(document).on("click", ".addComment", function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				var parent = $(this).closest('[data-parent-id]');
+				var parentId = parent.data('parent-id');
+				var content = parent.find('.comment-content').val();
+				if (content) {
+					content = content.trim();
+				}
+				var imageFile = parent.find('.comment-image')[0].files[0];
+				if (!parentId || (!content && !imageFile)) {
+					return;
+				}
+				var formData = new FormData();
+				formData.append("content", content || '');
+				// The Magic of Comments: We attach the 'pid' (Parent ID) to the request.
+				// This tells the backend that this is NOT a global tweet, but a reply to an existing one.
+				formData.append("pid", parentId);
+				if (imageFile) {
+					formData.append('image', imageFile);
+				}
+				$.ajax({
+					type: 'POST',
+					url: 'AddTweet',
+					data: formData,
+					processData: false,
+					contentType: false
+				}).done(function () {
+					$("#content").load("Tweet?id=" + parentId);
+				});
+			});
+
+		};
+
+		App.stack = function () {
+			$("#stack").toggleClass("w3-show");
+		};
+
+		// Ensure `App.init` runs correctly
+		$(document).ready(function () {
+			App.init();
+		});
+
+	</script>
+
+</head>
+
+<body>
+
+	<!-- Begin Navigation -->
+	<div class="w3-theme w3-top" id="navigation"> </div>
+	<!-- End Navigation -->
+
+	<!-- Begin Content -->
+	<div class="w3-row-padding" style="margin-top: 50px;margin-bottom: 75px">
+
+		<!-- Left Column -->
+		<div class="w3-container w3-col m3 w3-hide-small">
+			<div id="lcolumn"> </div>
+		</div>
+		<!-- Middle Column -->
+		<div class="w3-container w3-col m6">
+			<div id="content"> </div>
+		</div>
+		<!-- Right Column -->
+		<div class="w3-container w3-col m3 w3-hide-small">
+			<div id="rcolumn"> </div>
+		</div>
+
+	</div>
+	<!-- End Content -->
+	<!-- Footer -->
+	<footer class="w3-container w3-theme w3-bottom">
+		<p>Pompeu Fabra University @2026</p>
+	</footer>
+
+</body>
+
+</html>
